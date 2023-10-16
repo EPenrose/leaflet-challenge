@@ -1,84 +1,105 @@
-// Store our API endpoint as queryUrl.
-var queryUrl = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson?minlatitude=24.396308&maxlatitude=49.384358&minlongitude=-125.000000&maxlongitude=-66.934570";
-
-// Perform a GET request to the query URL.
-d3.json(queryUrl).then(function(data) {
-  // Once we get a response, send the data.features object to the createFeatures function.
-  createFeatures(data.features);
+// Creating the map object
+let myMap = L.map("map", {
+    center: [40.7128, -74.0059],
+    zoom: 2
 });
 
-function createFeatures(earthquakeData) {
-  // Define the getColor function to assign color based on depth.
-  function getColor(depth) {
-    if (depth < 10) {
-      return "#ffffcc";
-    } else if (depth < 30) {
-      return "#a1dab4";
-    } else if (depth < 50) {
-      return "#41b6c4";
-    } else if (depth < 70) {
-      return "#2c7fb8";
-    } else if (depth < 90) {
-      return "#253494";
-    } else {
-      return "#081d58";
-    }
-  }
-
-  // Define a function that we want to run once for each feature in the features array.
-  // Give each feature a popup that describes the place, magnitude, and depth of the earthquake.
-  function onEachFeature(feature, layer) {
-    layer.bindPopup(`<h3>${feature.properties.place}</h3><hr><p>Magnitude: ${feature.properties.mag}</p><p>Depth: ${feature.geometry.coordinates[2]}</p>`);
-  }
-
-  // Create a GeoJSON layer that contains the features array on the earthquakeData object.
-  // Run the onEachFeature function once for each piece of data in the array.
-  var earthquakes = L.geoJSON(earthquakeData, {
-    pointToLayer: function(feature, latlng) {
-      return L.circleMarker(latlng, {
-        radius: feature.properties.mag * 5,
-        fillColor: getColor(feature.geometry.coordinates[2]),
-        color: "#000",
-        weight: 1,
-        opacity: 1,
-        fillOpacity: 0.8
-      });
-    },
-    onEachFeature: onEachFeature
-  });
-
-  // Send earthquakes layer to the createMap function.
-  createMap(earthquakes);
-}
-
-function createMap(earthquakes) {
-  // Create the base layers.
-  var street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+// Adding the tile layer
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-  });
+}).addTo(myMap);
 
-  // Create a baseMaps object.
-  var baseMaps = {
-    "Street Map": street,
-    //"Topographic Map": topo
-  };
+// Use this link to get the GeoJSON data.
+let link = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson";
 
-  // Create an overlay object to hold our overlay.
-  var overlayMaps = {
-    Earthquakes: earthquakes
-  };
+// Getting our GeoJSON data
+d3.json(link).then(function (data) {
 
-  // Create our map, giving it the streetmap and earthquakes layers to display on load.
-  var myMap = L.map("map", {
-    center: [37.09, -95.71],
-    zoom: 5,
-    layers: [street, earthquakes]
-  });
+    //style info (radius, colour)
+    function styleinfo(x) {
+        console.log(x.geometry.coordinates)
 
-  // Create a layer control
-  // Pass it our baseMaps and overlayMaps.
-  // Add the layer control to the map.
-  L.control.layers(baseMaps, overlayMaps,{
-    collapsed: false
-  }).addTo(myMap);
-}
+        return {
+            radius: chooseRadius(x.properties.mag),
+            fillColor: chooseColor(x.geometry.coordinates[2]),
+            color: "#000",
+            weight: 1,
+            opacity: 1,
+            fillOpacity: 1,
+            stroke: 0.4
+        }
+    }
+
+
+    //get radius function
+    function chooseColor(depth) {
+        if (depth > 90) {
+            return "#f53939"
+        } else if (depth > 70) {
+            return "#ff7a00 "
+        } else if (depth > 50) {
+            return '#ffad4b'
+        } else if (depth > 30) {
+            return '#fff74b'
+        } else if (depth > 10) {
+            return '#92ff4b'
+        }
+
+        return "#00FF00"
+
+    }
+
+
+    //get colour function
+    function chooseRadius(mag) {
+        if (mag === 0) {
+            return "1";
+        }
+        return mag * 4
+    }
+
+    function onEachFeature(x, layer) {
+        layer.bindPopup("Magnitude: " + x.properties.mag + "<br>Location: " + x.properties.place + "<br>Depth: " + x.geometry.coordinates[2]);
+        layer.on('mouseover', function (e) {
+            this.openPopup();
+        });
+        layer.on('mouseout', function (e) {
+            this.closePopup();
+        });
+        layer.setOpacity(0);
+    }
+
+
+    // Creating a GeoJSON layer with the retrieved data
+    L.geoJson(data, {
+        pointToLayer: function (x, latlong) {
+            return L.circleMarker(latlong);
+        },
+        style: styleinfo,
+
+
+    }).addTo(myMap);
+
+    L.geoJSON(data, {
+        onEachFeature: onEachFeature
+    }).addTo(myMap);
+
+    //Legend    
+
+    var legend = L.control({ position: "bottomright" });
+    legend.onAdd = function () {
+        var div = L.DomUtil.create("div", "info legend")
+        var depth = [-10, 10, 30, 50, 70, 90];
+
+        div.innerHTML += "<h3 style='text-align: center'>Depth</h3>"
+
+        for (var i = 0; i < depth.length; i++) {
+            div.innerHTML += '<i class="circle" style="background:' + chooseColor(depth[i] + 1) + '"></i> ' + depth[i] + (depth[i + 1] ? '&ndash;' + depth[i + 1] + '<br>' : '+');
+        }
+        return div;
+    };
+
+
+    legend.addTo(myMap);
+
+});
